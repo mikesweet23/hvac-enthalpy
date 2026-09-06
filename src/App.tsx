@@ -5,11 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EnteringAirCard } from '@/components/sections/EnteringAirCard'
 import { CoolingCoilCard, type MoistureUnit } from '@/components/sections/CoolingCoilCard'
 import { HeatAddedCard } from '@/components/sections/HeatAddedCard'
+import { ProjectCard } from '@/components/sections/ProjectCard'
 import { PsychroChart } from '@/components/PsychroChart'
-import { InstallButton } from '@/components/InstallButton'
+import { AddToHomeScreen } from '@/components/AddToHomeScreen'
 import { usePersistentState } from '@/hooks/usePersistentState'
 import { COIL_PRESETS, coilPreset, type CoilId, type FlowUnit, type HeatMode } from '@/lib/presets'
 import { coolingCoil, dryAirMassFlow, sensibleHeating, stateFromTempRh } from '@/lib/psychro'
+import { exportReportPdf } from '@/lib/report'
+import type { ChartPoint } from '@/lib/chart'
 import { fmt } from '@/lib/format'
 
 const DEFAULTS = {
@@ -43,6 +46,8 @@ export default function App() {
     'moistureUnit',
     DEFAULTS.moistureUnit,
   )
+  const [projectRef, setProjectRef] = usePersistentState('projectRef', '')
+  const [projectNotes, setProjectNotes] = usePersistentState('projectNotes', '')
 
   const entering = useMemo(() => stateFromTempRh(tempC, rhPct / 100), [tempC, rhPct])
   const massFlow = useMemo(() => dryAirMassFlow(flowLs / 1000, entering), [flowLs, entering])
@@ -93,28 +98,52 @@ export default function App() {
     setRunHours(DEFAULTS.runHours)
   }
 
-  const chartPoints = [
+  const chartPoints: ChartPoint[] = [
     { id: 'A', label: 'Entering', state: entering, color: 'var(--primary)' },
     { id: 'B', label: 'After coil', state: afterCoil, color: '#0ea5e9' },
     { id: 'C', label: 'Final', state: final, color: '#f97316' },
   ]
 
+  const exportPdf = () =>
+    exportReportPdf({
+      projectRef,
+      notes: projectNotes,
+      inputs: { tempC, rhPct, flowLs, flowUnit, coilId, adp, bf, heatMode, heatKw, runHours, moistureUnit },
+      entering,
+      massFlowKgS: massFlow,
+      coil,
+      afterCoil,
+      heating,
+      final,
+      chartPoints,
+    })
+
   return (
     <div className="min-h-dvh bg-background pb-[env(safe-area-inset-bottom)]">
       <header className="sticky top-0 z-10 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
+        <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
             <Wind className="size-5" />
           </span>
-          <div className="min-w-0">
-            <h1 className="text-base font-semibold leading-tight">Enthalpy</h1>
-            <p className="text-xs text-muted-foreground leading-tight">
-              HVAC psychrometrics · sea level 101.325 kPa
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-semibold leading-tight">Enthalpy</h1>
+            <p className="truncate text-xs text-muted-foreground leading-tight">
+              HVAC psychrometrics<span className="hidden sm:inline"> · sea level 101.325 kPa</span>
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <InstallButton />
-            <Button size="sm" variant="ghost" onClick={reset} aria-label="Reset to defaults">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <AddToHomeScreen />
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={reset}
+              aria-label="Reset to defaults"
+              title="Reset to defaults"
+              className="sm:hidden"
+            >
+              <RotateCcw />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={reset} className="hidden sm:inline-flex">
               <RotateCcw data-icon="inline-start" />
               Reset
             </Button>
@@ -122,13 +151,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-4 space-y-4">
-        <div className="rounded-xl border bg-card px-4 py-3 flex items-center justify-between gap-2 text-sm">
-          <ProcessChip id="A" t={entering.t} rh={entering.rh} color="bg-primary" />
+      <main className="mx-auto max-w-5xl px-3 py-3 space-y-3 sm:px-4 sm:py-4 sm:space-y-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 rounded-xl border bg-card px-3 py-2.5 text-sm sm:gap-2 sm:px-4 sm:py-3">
+          <ProcessChip id="A" label="Entering" t={entering.t} rh={entering.rh} color="bg-primary" />
           <ArrowRight className="size-4 text-muted-foreground shrink-0" />
-          <ProcessChip id="B" t={afterCoil.t} rh={afterCoil.rh} color="bg-sky-500" />
+          <ProcessChip id="B" label="After coil" t={afterCoil.t} rh={afterCoil.rh} color="bg-sky-500" />
           <ArrowRight className="size-4 text-muted-foreground shrink-0" />
-          <ProcessChip id="C" t={final.t} rh={final.rh} color="bg-orange-500" />
+          <ProcessChip id="C" label="Final" t={final.t} rh={final.rh} color="bg-orange-500" />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -179,6 +208,15 @@ export default function App() {
               <PsychroChart points={chartPoints} />
             </CardContent>
           </Card>
+          <div className="md:col-span-2 xl:col-span-3">
+            <ProjectCard
+              projectRef={projectRef}
+              notes={projectNotes}
+              onProjectRef={setProjectRef}
+              onNotes={setProjectNotes}
+              onExport={exportPdf}
+            />
+          </div>
         </div>
 
         <footer className="text-[11px] text-muted-foreground leading-relaxed px-1 pb-4">
@@ -193,14 +231,37 @@ export default function App() {
   )
 }
 
-function ProcessChip({ id, t, rh, color }: { id: string; t: number; rh: number; color: string }) {
+function ProcessChip({
+  id,
+  label,
+  t,
+  rh,
+  color,
+}: {
+  id: string
+  label: string
+  t: number
+  rh: number
+  color: string
+}) {
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <span className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white ${color}`}>
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white ${color}`}
+      >
         {id}
       </span>
-      <span className="font-mono tabular-nums text-xs sm:text-sm whitespace-nowrap">
-        {fmt(t, 1)}°C · {fmt(rh * 100, 0)}%
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="hidden truncate text-[10px] uppercase tracking-wide text-muted-foreground sm:block">
+          {label}
+        </span>
+        <span className="truncate font-mono text-xs tabular-nums sm:text-sm">
+          {fmt(t, 1)}°C
+          <span className="hidden min-[400px]:inline"> · {fmt(rh * 100, 0)}%</span>
+        </span>
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground min-[400px]:hidden">
+          {fmt(rh * 100, 0)}% RH
+        </span>
       </span>
     </div>
   )

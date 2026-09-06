@@ -1,76 +1,29 @@
 import { useMemo } from 'react'
-import { satPressure, humidityRatioFromVapourPressure } from '@/lib/psychro'
-import type { MoistAirState } from '@/lib/psychro'
+import {
+  CHART_H,
+  CHART_PAD as PAD,
+  CHART_W,
+  RH_LINES,
+  chartLayout,
+  type ChartPoint,
+  type XY,
+} from '@/lib/chart'
 import { fmt } from '@/lib/format'
 
-interface ChartPoint {
-  id: string
-  label: string
-  state: MoistAirState
-  color: string
-}
+export type { ChartPoint } from '@/lib/chart'
 
 interface PsychroChartProps {
   points: ChartPoint[]
 }
 
-const W = 360
-const H = 230
-const PAD = { l: 34, r: 38, t: 10, b: 28 }
+const W = CHART_W
+const H = CHART_H
+
+const toPolyline = (pts: XY[]) => pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
 
 export function PsychroChart({ points }: PsychroChartProps) {
-  const { xMin, xMax, yMax } = useMemo(() => {
-    const ts = points.map((p) => p.state.t)
-    const ws = points.map((p) => p.state.W * 1000)
-    let lo = Math.floor((Math.min(...ts) - 8) / 10) * 10
-    let hi = Math.ceil((Math.max(...ts) + 8) / 10) * 10
-    lo = Math.max(-50, lo)
-    hi = Math.min(50, hi)
-    while (hi - lo < 40) {
-      if (lo > -50) lo -= 10
-      else if (hi < 50) hi += 10
-      else break
-    }
-    const wMax = Math.max(...ws, 0)
-    const y = Math.min(90, Math.max(5, Math.ceil((wMax * 1.35) / 5) * 5))
-    return { xMin: lo, xMax: hi, yMax: y }
-  }, [points])
-
-  const sx = (t: number) => PAD.l + ((t - xMin) / (xMax - xMin)) * (W - PAD.l - PAD.r)
-  const sy = (wgkg: number) => H - PAD.b - (wgkg / yMax) * (H - PAD.t - PAD.b)
-
-  const rhCurve = (rh: number) => {
-    const pts: string[] = []
-    for (let t = xMin; t <= xMax + 0.001; t += 1) {
-      const w = humidityRatioFromVapourPressure(rh * satPressure(t)) * 1000
-      pts.push(`${sx(t).toFixed(1)},${sy(w).toFixed(1)}`)
-    }
-    return pts.join(' ')
-  }
-
-  const rhLines = [0.2, 0.4, 0.6, 0.8]
-  const xTicks: number[] = []
-  const xStep = xMax - xMin > 60 ? 20 : 10
-  for (let t = xMin; t <= xMax; t += xStep) xTicks.push(t)
-  const yTicks: number[] = []
-  const yStep = yMax > 40 ? 20 : yMax > 15 ? 10 : yMax > 8 ? 5 : 1
-  for (let w = 0; w <= yMax; w += yStep) yTicks.push(w)
-
-  // Where each RH curve exits the plot area (right edge or top) for labelling.
-  const rhLabelPos = (rh: number) => {
-    const wAtRight = humidityRatioFromVapourPressure(rh * satPressure(xMax)) * 1000
-    if (wAtRight <= yMax) return { x: sx(xMax) + 3, y: sy(wAtRight) + 3 }
-    // find t where curve crosses yMax
-    let lo = xMin
-    let hi = xMax
-    for (let i = 0; i < 40; i++) {
-      const mid = (lo + hi) / 2
-      const w = humidityRatioFromVapourPressure(rh * satPressure(mid)) * 1000
-      if (w > yMax) hi = mid
-      else lo = mid
-    }
-    return { x: sx(lo) - 4, y: sy(yMax) + 9 }
-  }
+  const layout = useMemo(() => chartLayout(points), [points])
+  const { sx, sy, xTicks, yTicks, rhCurve, rhLabelPos, inPlot } = layout
 
   return (
     <svg
@@ -149,10 +102,10 @@ export function PsychroChart({ points }: PsychroChartProps) {
       </text>
 
       <g clipPath="url(#plot)">
-        {rhLines.map((rh) => (
+        {RH_LINES.map((rh) => (
           <polyline
             key={rh}
-            points={rhCurve(rh)}
+            points={toPolyline(rhCurve(rh))}
             fill="none"
             className="stroke-muted-foreground/50"
             strokeWidth={0.8}
@@ -160,7 +113,7 @@ export function PsychroChart({ points }: PsychroChartProps) {
           />
         ))}
         <polyline
-          points={rhCurve(1)}
+          points={toPolyline(rhCurve(1))}
           fill="none"
           className="stroke-foreground/70"
           strokeWidth={1.4}
@@ -186,16 +139,10 @@ export function PsychroChart({ points }: PsychroChartProps) {
       </g>
 
       {/* RH labels */}
-      {[...rhLines, 1].map((rh) => {
-        const pos = rhLabelPos(rh)
+      {[...RH_LINES, 1].map((rh) => {
+        const [x, y] = rhLabelPos(rh)
         return (
-          <text
-            key={`l${rh}`}
-            x={pos.x}
-            y={pos.y}
-            fontSize={8}
-            className="fill-muted-foreground"
-          >
+          <text key={`l${rh}`} x={x} y={y} fontSize={8} className="fill-muted-foreground">
             {Math.round(rh * 100)}%
           </text>
         )
@@ -205,8 +152,7 @@ export function PsychroChart({ points }: PsychroChartProps) {
       {points.map((p) => {
         const x = sx(p.state.t)
         const y = sy(p.state.W * 1000)
-        const inPlot = x >= PAD.l && x <= W - PAD.r && y >= PAD.t && y <= H - PAD.b
-        if (!inPlot) return null
+        if (!inPlot(x, y)) return null
         return (
           <g key={p.id}>
             <circle cx={x} cy={y} r={5} fill={p.color} className="stroke-background" strokeWidth={1.5} />
