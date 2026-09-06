@@ -8,7 +8,7 @@ import { HeatAddedCard } from '@/components/sections/HeatAddedCard'
 import { PsychroChart } from '@/components/PsychroChart'
 import { InstallButton } from '@/components/InstallButton'
 import { usePersistentState } from '@/hooks/usePersistentState'
-import { coilPreset, type CoilId, type FlowUnit, type HeatMode } from '@/lib/presets'
+import { COIL_PRESETS, coilPreset, type CoilId, type FlowUnit, type HeatMode } from '@/lib/presets'
 import { coolingCoil, dryAirMassFlow, sensibleHeating, stateFromTempRh } from '@/lib/psychro'
 import { fmt } from '@/lib/format'
 
@@ -17,12 +17,13 @@ const DEFAULTS = {
   rhPct: 55,
   flowLs: 500,
   flowUnit: 'ls' as FlowUnit,
-  coilId: 'chw' as CoilId,
+  coilId: 'chw6' as CoilId,
   adp: 9,
-  bf: 0.15,
+  bf: 0.1,
   heatMode: 'gains' as HeatMode,
   heatKw: 5,
   moistureUnit: 'lh' as MoistureUnit,
+  runHours: 8,
 }
 
 export default function App() {
@@ -30,7 +31,10 @@ export default function App() {
   const [rhPct, setRhPct] = usePersistentState('rhPct', DEFAULTS.rhPct)
   const [flowLs, setFlowLs] = usePersistentState('flowLs', DEFAULTS.flowLs)
   const [flowUnit, setFlowUnit] = usePersistentState<FlowUnit>('flowUnit', DEFAULTS.flowUnit)
-  const [coilId, setCoilId] = usePersistentState<CoilId>('coilId', DEFAULTS.coilId)
+  const [storedCoilId, setCoilId] = usePersistentState<CoilId>('coilId', DEFAULTS.coilId)
+  // Coil ids were renamed when row-based presets arrived; fall back gracefully for saved values.
+  const coilId: CoilId = COIL_PRESETS.some((c) => c.id === storedCoilId) ? storedCoilId : 'custom'
+  const [runHours, setRunHours] = usePersistentState('runHours', DEFAULTS.runHours)
   const [adp, setAdp] = usePersistentState('adp', DEFAULTS.adp)
   const [bf, setBf] = usePersistentState('bf', DEFAULTS.bf)
   const [heatMode, setHeatMode] = usePersistentState<HeatMode>('heatMode', DEFAULTS.heatMode)
@@ -86,6 +90,7 @@ export default function App() {
     setHeatMode(DEFAULTS.heatMode)
     setHeatKw(DEFAULTS.heatKw)
     setMoistureUnit(DEFAULTS.moistureUnit)
+    setRunHours(DEFAULTS.runHours)
   }
 
   const chartPoints = [
@@ -150,6 +155,8 @@ export default function App() {
             result={coil}
             moistureUnit={moistureUnit}
             onMoistureUnit={setMoistureUnit}
+            runHours={runHours}
+            onRunHours={setRunHours}
           />
           <HeatAddedCard
             mode={heatMode}
@@ -176,8 +183,10 @@ export default function App() {
 
         <footer className="text-[11px] text-muted-foreground leading-relaxed px-1 pb-4">
           Properties from ASHRAE Fundamentals (Hyland–Wexler) at standard atmospheric pressure. Coil model uses
-          apparatus dew point and bypass factor; condensate density taken as 1 kg/L. Results are for design
-          sizing and diagnostics – verify against manufacturer selection data before committing.
+          apparatus dew point and bypass factor; condensate density taken as 1 kg/L. Below 0 °C removed
+          moisture is held as frost (heat of fusion 333.6 kJ/kg, temperature-dependent ice specific heat) until
+          defrost. Results are for design sizing and diagnostics – verify against manufacturer selection data
+          before committing.
         </footer>
       </main>
     </div>

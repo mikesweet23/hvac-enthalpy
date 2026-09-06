@@ -5,13 +5,20 @@ dew point, enthalpy and the effect of a cooling coil and reheat update live.
 
 ## What it does
 
-**A · Entering air** — dry-bulb (-50 … +50 °C), relative humidity and airflow (toggle L/s ↔ m³/h).
-Outputs dew / frost point, enthalpy, wet bulb, moisture content, vapour pressure, density and dry-air mass flow.
+**A · Entering air** — dry-bulb (-50 … +50 °C), relative humidity and airflow on a log slider from
+10 L/s to 100 000 m³/h (toggle L/s ↔ m³/h). Outputs dew / frost point, enthalpy, wet bulb, moisture content,
+vapour pressure, density and dry-air mass flow.
 
-**B · Cooling coil** — multi-toggle for coil type (DX, chilled water, high-temperature chilled water,
-dehumidifier, custom or off). Each preset sets an apparatus dew point (ADP) and bypass factor which you can
-fine-tune. Shows moisture extraction in **L/s or L/h** (plus L/day), leaving temperature and RH, and total /
-sensible / latent cooling duty with the sensible heat ratio. Flags when the coil would run dry.
+**B · Cooling coil** — multi-toggle for coil type by rows: DX 3R / 4R / 5R / 6R, CHW 6R / 8R, a
+low-temperature freezer evaporator, custom or off. Each preset sets a typical apparatus dew point (ADP) and
+bypass factor, shows a description and an example application (e.g. DX 4R → VRF and split systems, DX 6R →
+deep dehumidification), and both values can be fine-tuned. Shows moisture extraction in **L/s or L/h**, split
+into **liquid to drain** and **held as frost**, leaving temperature and RH, and total / sensible / latent duty
+with the sensible heat ratio. Flags when the coil would run dry.
+
+When the ADP is below 0 °C the coil frosts: removed moisture is held on the fins as ice, the coil load includes
+the heat of fusion plus sub-cooling of the ice, and a defrost panel shows frost mass after a chosen run time,
+meltwater released at defrost and the defrost energy (ice warming + melting).
 
 **C · Heat added** — toggle between room gains and a duct heater and set the kW. Moisture content is held
 constant so you see how the final RH drops as the air warms. Quick buttons show the heat required to reach
@@ -26,6 +33,9 @@ A psychrometric chart plots the three states and the process lines, and all inpu
 - Dew point and wet bulb solved iteratively.
 - Coil: leaving state is the mixture of the bypassed fraction of entering air and air saturated at the ADP.
   Condensate rate = dry-air mass flow × ΔW, with water taken as 1 kg/L.
+- Frost (ADP < 0 °C): coil load `Q = ṁ·Δh + ṁ_w·(333.6 + c̄_ice·|ADP|)` where the ice specific heat
+  `c_ice(T) = 2.108 + 0.0077·T` kJ/kg·K (2.11 at 0 °C → 1.72 at -50 °C) is averaged over 0 → ADP.
+  Defrost energy = frost mass × (c̄_ice·|ADP| + 333.6) kJ.
 - Heating: constant-W enthalpy rise `Q = ṁ·Δh`.
 - Standard atmospheric pressure (101.325 kPa) throughout.
 

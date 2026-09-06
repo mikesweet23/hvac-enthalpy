@@ -184,10 +184,43 @@ export function dryAirMassFlow(volumeFlowM3s: number, state: MoistAirState): num
   return volumeFlowM3s / state.v
 }
 
+/** Latent heat of fusion of water at 0 °C, kJ/kg. */
+export const H_FUSION = 333.6
+/** Specific heat of liquid water, kJ/kg·K. */
+export const CP_WATER = 4.186
+
+/**
+ * Specific heat of ice / frost, kJ/(kg·K). Falls almost linearly from
+ * 2.10 at 0 °C to about 1.72 at -50 °C (CRC / ASHRAE data).
+ */
+export function iceCp(tC: number): number {
+  const t = Math.min(tC, 0)
+  return 2.108 + 0.0077 * t
+}
+
+/**
+ * Enthalpy of frost at temperature t relative to liquid water at 0 °C, kJ/kg.
+ * Negative: energy must be *added* to bring frost back to liquid at 0 °C.
+ * Uses the mean ice cp over 0 → t for the sensible part.
+ */
+export function frostEnthalpy(tC: number): number {
+  const t = Math.min(tC, 0)
+  const cpMean = (iceCp(0) + iceCp(t)) / 2
+  return -(H_FUSION + cpMean * -t)
+}
+
 export interface CoilResult {
   leaving: MoistAirState
-  /** water condensed, kg/s (≈ L/s) */
+  /** total water removed from the air, kg/s */
   condensateKgS: number
+  /** liquid running to the drain, kg/s (≈ L/s) */
+  drainKgS: number
+  /** water deposited as frost on the coil, kg/s */
+  frostKgS: number
+  /** true when the coil surface is below 0 °C and moisture freezes on it */
+  frosting: boolean
+  /** extra coil load from freezing and sub-cooling the frost, kW */
+  frostKw: number
   totalKw: number
   sensibleKw: number
   latentKw: number
@@ -202,6 +235,10 @@ export interface CoilResult {
  * Leaving air is the mixture of BF fraction of untouched entering air and
  * (1 - BF) of air saturated at the ADP. When the entering dew point is below
  * the ADP the coil runs dry and only sensible cooling occurs.
+ *
+ * Below 0 °C the coil surface is frosted: the removed moisture is held on the
+ * fins as ice rather than draining, and the coil must additionally reject the
+ * heat of fusion plus the sensible heat of cooling the ice to the ADP.
  */
 export function coolingCoil(
   entering: MoistAirState,
@@ -218,20 +255,63 @@ export function coolingCoil(
 
   const leaving = stateFromTempW(tOut, WOut, p)
   const condensateKgS = Math.max(massFlowKgS * (entering.W - leaving.W), 0)
-  const totalKw = Math.max(massFlowKgS * (entering.h - leaving.h), 0)
-  const sensibleKw = Math.max(
-    massFlowKgS * moistCp(leaving.W) * (entering.t - leaving.t),
-    0,
+  const frosting = adpC < 0 && condensateKgS > 0
+  const frostKgS = frosting ? condensateKgS : 0
+  const drainKgS = frosting ? 0 : condensateKgS
+
+  // Energy balance: Q = m_da (h_in - h_out) - m_w h_w, with h_w the enthalpy of the
+  // water leaving the airstream. Liquid condensate at ~ADP carries a little heat away;
+  // frost has strongly negative enthalpy, so it *adds* to the coil load.
+  const airKw = Math.max(massFlowKgS * (entering.h - leaving.h), 0)
+  const frostKw = frosting ? frostKgS * -frostEnthalpy(adpC) : 0
+  const drainKw = drainKgS * CP_WATER * Math.max(adpC, 0)
+  const totalKw = Math.max(airKw + frostKw - drainKw, 0)
+  const sensibleKw = Math.min(
+    Math.max(massFlowKgS * moistCp(leaving.W) * (entering.t - leaving.t), 0),
+    totalKw,
   )
   const latentKw = Math.max(totalKw - sensibleKw, 0)
   return {
     leaving,
     condensateKgS,
+    drainKgS,
+    frostKgS,
+    frosting,
+    frostKw,
     totalKw,
     sensibleKw,
     latentKw,
     shr: totalKw > 0 ? sensibleKw / totalKw : 1,
     dryCoil,
+  }
+}
+
+export interface FrostAccumulation {
+  /** frost mass built up on the coil over the run period, kg */
+  massKg: number
+  /** energy to warm the frost to 0 °C and melt it, kWh */
+  defrostKwh: number
+  /** …of which sensible (ice warming) part, kWh */
+  sensibleKwh: number
+  /** …of which latent (melting) part, kWh */
+  meltKwh: number
+  /** water released to drain when the coil is defrosted, L */
+  meltwaterL: number
+}
+
+/** Frost held on the coil after `hours` of running, and what it takes to clear it. */
+export function frostAccumulation(frostKgS: number, frostTempC: number, hours: number): FrostAccumulation {
+  const massKg = Math.max(frostKgS * hours * 3600, 0)
+  const t = Math.min(frostTempC, 0)
+  const cpMean = (iceCp(0) + iceCp(t)) / 2
+  const sensibleKj = massKg * cpMean * -t
+  const meltKj = massKg * H_FUSION
+  return {
+    massKg,
+    defrostKwh: (sensibleKj + meltKj) / 3600,
+    sensibleKwh: sensibleKj / 3600,
+    meltKwh: meltKj / 3600,
+    meltwaterL: massKg,
   }
 }
 

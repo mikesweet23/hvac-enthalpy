@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  H_FUSION,
   coolingCoil,
   dewPointFromVapourPressure,
   dryAirMassFlow,
   enthalpy,
+  frostAccumulation,
+  frostEnthalpy,
+  iceCp,
   satPressure,
   sensibleHeating,
   stateFromTempRh,
@@ -101,6 +105,51 @@ describe('cooling coil', () => {
     const litresPerHour = r.condensateKgS * 3600
     expect(litresPerHour).toBeGreaterThan(20)
     expect(litresPerHour).toBeLessThan(60)
+  })
+})
+
+describe('frosting coil', () => {
+  it('has ice specific heat matching reference data', () => {
+    expect(iceCp(0)).toBeCloseTo(2.11, 1)
+    expect(iceCp(-20)).toBeCloseTo(1.95, 1)
+    expect(iceCp(-40)).toBeCloseTo(1.80, 1)
+  })
+
+  it('frost enthalpy includes fusion and sub-cooling', () => {
+    expect(frostEnthalpy(0)).toBeCloseTo(-H_FUSION, 6)
+    // 20 K of sub-cooling at mean cp ≈ 2.03 adds ~40.6 kJ/kg
+    expect(frostEnthalpy(-20)).toBeCloseTo(-(H_FUSION + 40.6), 0)
+  })
+
+  it('routes moisture to frost, not drain, when the ADP is below 0 °C', () => {
+    const inlet = stateFromTempRh(-18, 0.9) // freezer room air
+    const m = dryAirMassFlow(2, inlet)
+    const r = coolingCoil(inlet, -28, 0.15, m)
+    expect(r.frosting).toBe(true)
+    expect(r.drainKgS).toBe(0)
+    expect(r.frostKgS).toBeGreaterThan(0)
+    expect(r.frostKgS).toBeCloseTo(r.condensateKgS, 12)
+    expect(r.frostKw).toBeGreaterThan(0)
+    // frost load ≈ m_w × (333.6 + cp·28)
+    expect(r.frostKw / r.frostKgS).toBeCloseTo(-frostEnthalpy(-28), 6)
+    expect(r.totalKw).toBeGreaterThan(m * (inlet.h - r.leaving.h))
+  })
+
+  it('drains liquid when the ADP is above 0 °C', () => {
+    const inlet = stateFromTempRh(27, 0.5)
+    const r = coolingCoil(inlet, 9, 0.15, dryAirMassFlow(1, inlet))
+    expect(r.frosting).toBe(false)
+    expect(r.frostKgS).toBe(0)
+    expect(r.drainKgS).toBeCloseTo(r.condensateKgS, 12)
+  })
+
+  it('accumulates frost and computes defrost energy', () => {
+    const acc = frostAccumulation(0.001, -25, 8) // 1 g/s for 8 h
+    expect(acc.massKg).toBeCloseTo(28.8, 6)
+    expect(acc.meltwaterL).toBeCloseTo(28.8, 6)
+    expect(acc.meltKwh).toBeCloseTo((28.8 * H_FUSION) / 3600, 6)
+    expect(acc.sensibleKwh).toBeGreaterThan(0)
+    expect(acc.defrostKwh).toBeCloseTo(acc.meltKwh + acc.sensibleKwh, 9)
   })
 })
 

@@ -41,8 +41,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
       },
+      // Service worker only in production builds; in dev it just serves stale precaches.
       devOptions: {
-        enabled: true,
+        enabled: false,
       },
     }),
   ],

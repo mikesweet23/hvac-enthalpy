@@ -87,13 +87,15 @@ export function EnteringAirCard({
             label="Volume flow"
             value={Number(flowDisplay.toFixed(0))}
             onChange={(v) => onFlowLs(unit.toLs(v))}
-            min={0}
+            min={unit.min}
             max={unit.max}
-            step={unit.step}
+            step={1}
+            scale="log"
             unit={unit.label}
             digits={0}
-            inputMax={unit.max * 20}
-            hint={`≈ ${fmt(massFlowKgS, 3)} kg/s dry air · ${
+            inputMin={0}
+            inputMax={unit.max * 10}
+            hint={`≈ ${fmt(massFlowKgS, massFlowKgS < 1 ? 3 : 2)} kg/s dry air · ${
               flowUnit === 'ls' ? `${fmt(flowLs * 3.6, 0)} m³/h` : `${fmt(flowLs, 0)} L/s`
             }`}
           />

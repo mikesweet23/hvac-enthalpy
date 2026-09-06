@@ -7,7 +7,7 @@ import { Stat, StatGrid } from '@/components/Stat'
 import { HEAT_MODES, type HeatMode } from '@/lib/presets'
 import type { HeatingResult, MoistAirState } from '@/lib/psychro'
 import { heatForTemperatureRise } from '@/lib/psychro'
-import { fmt, signed } from '@/lib/format'
+import { fmt, fmtAuto, signed } from '@/lib/format'
 
 interface Props {
   mode: HeatMode
@@ -21,11 +21,24 @@ interface Props {
 
 const TARGETS = [18, 21, 24]
 
+/** Round up to 1, 2 or 5 × 10ⁿ so the slider ends on a tidy number. */
+function niceCeil(v: number): number {
+  const mag = 10 ** Math.floor(Math.log10(v))
+  for (const m of [1, 2, 5, 10]) {
+    if (v <= m * mag) return m * mag
+  }
+  return 10 * mag
+}
+
 export function HeatAddedCard({ mode, heatKw, onMode, onHeatKw, entering, result, massFlowKgS }: Props) {
   const info = HEAT_MODES.find((m) => m.id === mode) ?? HEAT_MODES[0]
   const off = mode === 'off'
   const leaving = result.leaving
   const outOfRange = leaving.t > 50
+  // Scale the slider to the airflow: enough kW for the mode's typical temperature rise.
+  const rawMax = Math.max(heatForTemperatureRise(entering, entering.t + info.riseK, massFlowKgS), 5)
+  const sliderMax = niceCeil(rawMax)
+  const sliderStep = sliderMax >= 1000 ? 5 : sliderMax >= 200 ? 1 : sliderMax >= 50 ? 0.5 : 0.1
 
   return (
     <Card>
@@ -74,13 +87,13 @@ export function HeatAddedCard({ mode, heatKw, onMode, onHeatKw, entering, result
           value={heatKw}
           onChange={onHeatKw}
           min={0}
-          max={off ? 10 : info.max}
-          step={info.step}
+          max={sliderMax}
+          step={sliderStep}
           unit="kW"
           digits={1}
           disabled={off}
-          inputMax={1000}
-          hint={`${fmt(heatKw * 1000, 0)} W`}
+          inputMax={100_000}
+          hint={heatKw < 10 ? `${fmt(heatKw * 1000, 0)} W` : `${fmt(heatKw / 1000, 2)} MW`}
         />
 
         {!off ? (
@@ -97,7 +110,7 @@ export function HeatAddedCard({ mode, heatKw, onMode, onHeatKw, entering, result
                   onClick={() => onHeatKw(Math.ceil(kw * 10) / 10)}
                   className="rounded-md border border-orange-500/40 bg-orange-500/10 px-2 py-1 text-xs font-medium tabular-nums hover:bg-orange-500/20 disabled:opacity-40 disabled:hover:bg-orange-500/10"
                 >
-                  {t} °C → {reachable ? `${fmt(kw, 1)} kW` : 'n/a'}
+                  {t} °C → {reachable ? `${fmtAuto(kw)} kW` : 'n/a'}
                 </button>
               )
             })}
