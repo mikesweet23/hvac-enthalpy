@@ -97,7 +97,8 @@ class Layout {
 
   sectionTitle(letter: string, title: string, color: string, subtitle?: string) {
     const doc = this.doc
-    this.ensure(14)
+    // keep the heading with at least a few rows of its content
+    this.ensure(14 + 20)
     doc.setFillColor(color)
     doc.roundedRect(MARGIN, this.y, 7, 7, 1.5, 1.5, 'F')
     doc.setFont('helvetica', 'bold')

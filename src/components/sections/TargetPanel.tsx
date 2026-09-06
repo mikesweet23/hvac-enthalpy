@@ -84,7 +84,7 @@ export function TargetPanel({ entering, massFlowKgS, target, onTarget, onApplyKw
           }
         />
         <Stat
-          label={`${fmt(spec.rhPct, 0)} % RH reached at`}
+          label={`${fmt(spec.rhPct, 0)} % RH at`}
           value={a.tForRh === null ? '—' : fmt(a.tForRh, 1)}
           unit="°C"
           emphasis="warm"
