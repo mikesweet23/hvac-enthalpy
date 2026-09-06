@@ -94,7 +94,7 @@ export function HeatAddedCard({ mode, heatKw, onMode, onHeatKw, entering, result
                   key={t}
                   type="button"
                   disabled={!reachable}
-                  onClick={() => onHeatKw(Number(kw.toFixed(1)))}
+                  onClick={() => onHeatKw(Math.ceil(kw * 10) / 10)}
                   className="rounded-md border border-orange-500/40 bg-orange-500/10 px-2 py-1 text-xs font-medium tabular-nums hover:bg-orange-500/20 disabled:opacity-40 disabled:hover:bg-orange-500/10"
                 >
                   {t} °C → {reachable ? `${fmt(kw, 1)} kW` : 'n/a'}
