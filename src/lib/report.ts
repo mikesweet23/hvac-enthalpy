@@ -3,6 +3,7 @@ import { CHART_H, CHART_PAD, CHART_W, RH_LINES, chartLayout, type ChartPoint } f
 import { fmt, fmtAuto, signed } from '@/lib/format'
 import { FLOW_UNITS, HEAT_MODES, coilPreset, type CoilId, type FlowUnit, type HeatMode } from '@/lib/presets'
 import { frostAccumulation, iceCp, type CoilResult, type HeatingResult, type MoistAirState } from '@/lib/psychro'
+import { analyseTarget, type TargetSpec } from '@/lib/target'
 import { isTouchDevice } from '@/lib/platform'
 
 export interface ReportInputs {
@@ -29,6 +30,7 @@ export interface ReportData {
   afterCoil: MoistAirState
   heating: HeatingResult
   final: MoistAirState
+  target: TargetSpec
   chartPoints: ChartPoint[]
 }
 
@@ -540,6 +542,66 @@ export function buildReport(doc: jsPDF, data: ReportData): jsPDF {
       ['Moisture content', `${fmt(final.W * 1000, 2)} g/kg`],
     ])
     if (final.t > 50) L.note('Final temperature is above the 50 °C chart range.', COLOR.warn, 8.5)
+  }
+  L.gap(3)
+
+  // Target room condition ---------------------------------------------------------
+  const ta = analyseTarget(afterCoil, massFlowKgS, data.target)
+  const bandLabel =
+    ta.spec.tolK > 0 ? `${fmt(ta.band.lo, 1)} – ${fmt(ta.band.hi, 1)} °C` : `${fmt(ta.spec.tempC, 1)} °C`
+  L.sectionTitle(
+    'C',
+    'Target room condition',
+    COLOR.c,
+    `${fmt(ta.spec.tempC, 1)} °C ± ${fmt(ta.spec.tolK, 1)} K · ${fmt(ta.spec.rhPct, 0)} % RH`,
+  )
+  L.kvTable([
+    ['Target temperature', `${fmt(ta.spec.tempC, 1)} °C`, `band ${bandLabel}`],
+    ['Target RH', `${fmt(ta.spec.rhPct, 0)} %`],
+    [
+      `RH at ${fmt(ta.spec.tempC, 1)} °C`,
+      `${fmt(ta.atTarget.rh * 100, 0)} %`,
+      ta.saturatedAtTarget ? 'saturated' : undefined,
+    ],
+    [
+      `Heat to reach ${fmt(ta.spec.tempC, 1)} °C`,
+      ta.kwToTarget === null ? 'n/a' : `${fmtAuto(ta.kwToTarget)} kW`,
+      ta.kwToTarget === null ? 'coil air already warmer' : `${signed(ta.spec.tempC - afterCoil.t, 1)} K`,
+    ],
+    [`${fmt(ta.spec.rhPct, 0)} % RH reached at`, ta.tForRh === null ? 'n/a' : `${fmt(ta.tForRh, 1)} °C`],
+    [
+      `Heat to reach ${fmt(ta.spec.rhPct, 0)} % RH`,
+      ta.kwForRh === null ? 'n/a' : `${fmtAuto(ta.kwForRh)} kW`,
+      ta.kwForRh === null && ta.tForRh !== null ? 'below coil leaving temperature' : undefined,
+    ],
+    ['RH across the band', `${fmt(ta.band.rhAtLo * 100, 0)} – ${fmt(ta.band.rhAtHi * 100, 0)} %`],
+    [
+      'Moisture needed',
+      `${fmt(ta.required.W * 1000, 2)} g/kg`,
+      `dew point ${fmt(ta.required.td, 1)} °C · have ${fmt(afterCoil.W * 1000, 2)}`,
+    ],
+  ])
+  if (ta.rhInBand && ta.tForRh !== null) {
+    L.note(
+      `Achievable by heating alone: ${fmt(ta.spec.rhPct, 0)} % RH lands at ${fmt(ta.tForRh, 1)} °C, inside the ${bandLabel} band` +
+        (ta.kwForRh !== null ? ` with ${fmtAuto(ta.kwForRh)} kW of heat.` : '.'),
+      '#047857',
+      8.5,
+    )
+  } else {
+    const d = ta.required.deltaW * 1000
+    const fix =
+      Math.abs(d) < 0.05
+        ? ''
+        : d < 0
+          ? ` Remove ${fmt(-d, 2)} g/kg (~${fmtAuto(-ta.required.kgPerH)} kg/h): lower the coil ADP or use a deeper coil.`
+          : ` Add ${fmt(d, 2)} g/kg (~${fmtAuto(ta.required.kgPerH)} kg/h): a humidifier is needed.`
+    L.note(
+      `Not achievable by heating alone: across ${bandLabel} the RH would run ${fmt(ta.band.rhAtLo * 100, 0)} – ${fmt(ta.band.rhAtHi * 100, 0)} %.` +
+        fix,
+      COLOR.warn,
+      8.5,
+    )
   }
   L.gap(3)
 

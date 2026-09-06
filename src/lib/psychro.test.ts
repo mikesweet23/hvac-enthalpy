@@ -7,14 +7,17 @@ import {
   enthalpy,
   frostAccumulation,
   frostEnthalpy,
+  heatForTemperatureRise,
   iceCp,
   satPressure,
   sensibleHeating,
   stateFromTempRh,
   stateFromTempW,
+  temperatureForRelativeHumidity,
   temperatureFromEnthalpy,
   wetBulb,
 } from './psychro'
+import { analyseTarget } from './target'
 
 // Reference values from ASHRAE Fundamentals psychrometric tables.
 describe('saturation pressure', () => {
@@ -170,5 +173,71 @@ describe('sensible heating', () => {
     const inlet = stateFromTempRh(12, 0.9)
     expect(sensibleHeating(inlet, 0, 1).leaving).toBe(inlet)
     expect(sensibleHeating(inlet, 5, 0).leaving).toBe(inlet)
+  })
+})
+
+describe('temperature for a relative humidity', () => {
+  it('inverts stateFromTempRh along a constant-W line', () => {
+    const W = stateFromTempRh(21, 0.45).W
+    expect(temperatureForRelativeHumidity(W, 0.45)).toBeCloseTo(21, 4)
+    // warming the same air lowers RH, so 30 % is found at a higher temperature
+    expect(temperatureForRelativeHumidity(W, 0.3)!).toBeGreaterThan(21)
+  })
+
+  it('returns the dew point at 100 %', () => {
+    const s = stateFromTempRh(27, 0.55)
+    expect(temperatureForRelativeHumidity(s.W, 1)).toBeCloseTo(s.td!, 4)
+  })
+
+  it('returns null for dry air or a zero RH', () => {
+    expect(temperatureForRelativeHumidity(0, 0.5)).toBeNull()
+    expect(temperatureForRelativeHumidity(0.01, 0)).toBeNull()
+  })
+})
+
+describe('target room condition', () => {
+  // typical office coil leaving condition: 12 °C / 95 %
+  const afterCoil = stateFromTempRh(12, 0.95)
+  const mdot = dryAirMassFlow(1, afterCoil)
+
+  it('reports RH at the target temperature and the heat to get there', () => {
+    const a = analyseTarget(afterCoil, mdot, { tempC: 21, tolK: 2, rhPct: 45 })
+    expect(a.atTarget.t).toBe(21)
+    expect(a.atTarget.W).toBeCloseTo(afterCoil.W, 12)
+    expect(a.atTarget.rh).toBeCloseTo(stateFromTempW(21, afterCoil.W).rh, 12)
+    expect(a.kwToTarget).toBeCloseTo(heatForTemperatureRise(afterCoil, 21, mdot), 9)
+    expect(a.saturatedAtTarget).toBe(false)
+  })
+
+  it('finds the temperature that gives the target RH and checks it against the band', () => {
+    const a = analyseTarget(afterCoil, mdot, { tempC: 21, tolK: 2, rhPct: 45 })
+    // 12 °C / 95 % holds ~8.3 g/kg – at 21 °C that is ~53 %, so 45 % needs warmer air than 23 °C
+    expect(a.tForRh!).toBeGreaterThan(23)
+    expect(a.rhInBand).toBe(false)
+    expect(a.band.rhAtLo).toBeGreaterThan(a.band.rhAtHi)
+    expect(a.kwForRh!).toBeGreaterThan(a.kwToTarget!)
+
+    // widen the RH target and it becomes reachable inside the band
+    const b = analyseTarget(afterCoil, mdot, { tempC: 21, tolK: 2, rhPct: 52 })
+    expect(b.rhInBand).toBe(true)
+    expect(b.tForRh!).toBeGreaterThanOrEqual(19)
+    expect(b.tForRh!).toBeLessThanOrEqual(23)
+  })
+
+  it('says how much moisture must change to hit both temperature and RH', () => {
+    const a = analyseTarget(afterCoil, mdot, { tempC: 21, tolK: 2, rhPct: 45 })
+    expect(a.required.W).toBeCloseTo(stateFromTempRh(21, 0.45).W, 12)
+    // the coil air is too moist for 21 °C / 45 % → negative delta (dehumidify)
+    expect(a.required.deltaW).toBeLessThan(0)
+    expect(a.required.kgPerH).toBeCloseTo(a.required.deltaW * mdot * 3600, 9)
+
+    const dry = analyseTarget(stateFromTempRh(12, 0.3), mdot, { tempC: 21, tolK: 2, rhPct: 45 })
+    expect(dry.required.deltaW).toBeGreaterThan(0)
+  })
+
+  it('flags targets colder than the coil leaving air as unreachable by heating', () => {
+    const a = analyseTarget(afterCoil, mdot, { tempC: 10, tolK: 1, rhPct: 50 })
+    expect(a.kwToTarget).toBeNull()
+    expect(a.saturatedAtTarget).toBe(true)
   })
 })
