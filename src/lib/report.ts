@@ -98,10 +98,20 @@ class Layout {
     this.ensure(14)
     doc.setFillColor(color)
     doc.roundedRect(MARGIN, this.y, 7, 7, 1.5, 1.5, 'F')
-    doc.setTextColor('#ffffff')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text(letter, MARGIN + 3.5, this.y + 4.9, { align: 'center' })
+    if (letter) {
+      doc.setTextColor('#ffffff')
+      doc.setFontSize(9)
+      doc.text(letter, MARGIN + 3.5, this.y + 4.9, { align: 'center' })
+    } else {
+      // no letter: draw a tiny rising line as a "chart" glyph
+      doc.setDrawColor('#ffffff')
+      doc.setLineWidth(0.6)
+      doc.setLineCap('round')
+      doc.line(MARGIN + 1.8, this.y + 5.2, MARGIN + 3.3, this.y + 3.4)
+      doc.line(MARGIN + 3.3, this.y + 3.4, MARGIN + 4.4, this.y + 4.4)
+      doc.line(MARGIN + 4.4, this.y + 4.4, MARGIN + 5.4, this.y + 2.2)
+    }
     doc.setTextColor(COLOR.ink)
     doc.setFontSize(12)
     doc.text(pdfText(title), MARGIN + 10, this.y + 5.2)
@@ -534,10 +544,15 @@ export function buildReport(doc: jsPDF, data: ReportData): jsPDF {
   L.gap(3)
 
   // Chart --------------------------------------------------------------------
-  const chartW = 124
-  const chartH = (CHART_H / CHART_W) * chartW
-  L.ensure(chartH + 16)
-  L.sectionTitle('~', 'Psychrometric chart', '#374151', 'blue: coil process · orange: sensible heating')
+  const ratio = CHART_H / CHART_W
+  const titleH = 12
+  const remaining = PAGE_H - MARGIN - FOOTER_H - L.y
+  const fitW = (remaining - titleH - 4) / ratio
+  // Tuck the chart under the tables when it still reads well (>= 100 mm wide); otherwise give it a fresh page.
+  const chartW = fitW >= 100 ? Math.min(fitW, 124) : 160
+  const chartH = ratio * chartW
+  L.ensure(chartH + titleH + 4)
+  L.sectionTitle('', 'Psychrometric chart', '#374151', 'blue: coil process · orange: sensible heating')
   const chartX = MARGIN + (CONTENT_W - chartW) / 2
   drawChart(doc, data.chartPoints, chartX, L.y, chartW)
   L.gap(chartH + 4)
