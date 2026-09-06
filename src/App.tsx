@@ -13,6 +13,7 @@ import { COIL_PRESETS, coilPreset, type CoilId, type FlowUnit, type HeatMode } f
 import { coolingCoil, dryAirMassFlow, sensibleHeating, stateFromTempRh } from '@/lib/psychro'
 import { exportReportPdf } from '@/lib/report'
 import type { ChartPoint } from '@/lib/chart'
+import type { TargetSpec } from '@/lib/target'
 import { fmt } from '@/lib/format'
 
 const DEFAULTS = {
@@ -27,6 +28,7 @@ const DEFAULTS = {
   heatKw: 5,
   moistureUnit: 'lh' as MoistureUnit,
   runHours: 8,
+  target: { tempC: 21, tolK: 2, rhPct: 45 } as TargetSpec,
 }
 
 export default function App() {
@@ -46,6 +48,7 @@ export default function App() {
     'moistureUnit',
     DEFAULTS.moistureUnit,
   )
+  const [target, setTarget] = usePersistentState<TargetSpec>('target', DEFAULTS.target)
   const [projectRef, setProjectRef] = usePersistentState('projectRef', '')
   const [projectNotes, setProjectNotes] = usePersistentState('projectNotes', '')
 
@@ -96,6 +99,7 @@ export default function App() {
     setHeatKw(DEFAULTS.heatKw)
     setMoistureUnit(DEFAULTS.moistureUnit)
     setRunHours(DEFAULTS.runHours)
+    setTarget(DEFAULTS.target)
   }
 
   const chartPoints: ChartPoint[] = [
@@ -115,6 +119,7 @@ export default function App() {
       afterCoil,
       heating,
       final,
+      target,
       chartPoints,
     })
 
@@ -195,6 +200,8 @@ export default function App() {
             entering={afterCoil}
             result={heating}
             massFlowKgS={massFlow}
+            target={target}
+            onTarget={setTarget}
           />
           <Card className="md:col-span-2 xl:col-span-3">
             <CardHeader>

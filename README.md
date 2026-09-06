@@ -24,6 +24,12 @@ meltwater released at defrost and the defrost energy (ice warming + melting).
 constant so you see how the final RH drops as the air warms. Quick buttons show the heat required to reach
 18 / 21 / 24 °C.
 
+**Target room condition** — enter the condition you have to hit (e.g. 21 °C ± 2 K at 45 % RH). The panel
+shows the RH you would get at the target temperature and the heat to get there, the temperature at which the
+target RH is reached and whether that falls inside the band, the RH range across the band, and – when heating
+alone can't do it – how much moisture the coil (or a humidifier) has to remove or add. One tap sets the heater
+to either answer.
+
 A psychrometric chart plots the three states and the process lines, and all inputs persist on the device.
 
 **Project reference & PDF** — give the calculation a project reference and optional notes, then *Save as PDF*

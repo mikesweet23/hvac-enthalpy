@@ -4,9 +4,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Badge } from '@/components/ui/badge'
 import { SliderField } from '@/components/SliderField'
 import { Stat, StatGrid } from '@/components/Stat'
+import { TargetPanel } from '@/components/sections/TargetPanel'
 import { HEAT_MODES, type HeatMode } from '@/lib/presets'
 import type { HeatingResult, MoistAirState } from '@/lib/psychro'
 import { heatForTemperatureRise } from '@/lib/psychro'
+import type { TargetSpec } from '@/lib/target'
 import { fmt, fmtAuto, signed } from '@/lib/format'
 
 interface Props {
@@ -17,6 +19,8 @@ interface Props {
   entering: MoistAirState
   result: HeatingResult
   massFlowKgS: number
+  target: TargetSpec
+  onTarget: (t: TargetSpec) => void
 }
 
 const TARGETS = [18, 21, 24]
@@ -30,9 +34,23 @@ function niceCeil(v: number): number {
   return 10 * mag
 }
 
-export function HeatAddedCard({ mode, heatKw, onMode, onHeatKw, entering, result, massFlowKgS }: Props) {
+export function HeatAddedCard({
+  mode,
+  heatKw,
+  onMode,
+  onHeatKw,
+  entering,
+  result,
+  massFlowKgS,
+  target,
+  onTarget,
+}: Props) {
   const info = HEAT_MODES.find((m) => m.id === mode) ?? HEAT_MODES[0]
   const off = mode === 'off'
+  const applyKw = (kw: number) => {
+    if (off) onMode('heater')
+    onHeatKw(kw)
+  }
   const leaving = result.leaving
   const outOfRange = leaving.t > 50
   // Scale the slider to the airflow: enough kW for the mode's typical temperature rise.
@@ -143,6 +161,14 @@ export function HeatAddedCard({ mode, heatKw, onMode, onHeatKw, entering, result
             Final temperature is above the 50 °C chart range
           </Badge>
         ) : null}
+
+        <TargetPanel
+          entering={entering}
+          massFlowKgS={massFlowKgS}
+          target={target}
+          onTarget={onTarget}
+          onApplyKw={applyKw}
+        />
       </CardContent>
     </Card>
   )

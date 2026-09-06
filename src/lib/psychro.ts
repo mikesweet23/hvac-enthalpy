@@ -337,6 +337,19 @@ export function sensibleHeating(
   return { leaving, deltaT: tOut - entering.t }
 }
 
+/**
+ * Dry-bulb temperature at which air holding humidity ratio W sits at relative humidity rh
+ * (i.e. along a constant-moisture heating / cooling line). Null when there is no vapour
+ * or the requested RH is not physically reachable.
+ */
+export function temperatureForRelativeHumidity(W: number, rh: number, p = P_ATM): number | null {
+  if (!(W > 0) || !(rh > 0)) return null
+  const pw = vapourPressureFromHumidityRatio(W, p)
+  const pwsTarget = pw / Math.min(rh, 1)
+  if (pwsTarget > satPressure(100)) return null
+  return bisect((t) => satPressure(t) - pwsTarget, -100, 100)
+}
+
 /** Heat (kW) needed to raise air from one dry-bulb to another at constant W. */
 export function heatForTemperatureRise(
   entering: MoistAirState,
