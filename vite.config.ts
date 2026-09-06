@@ -40,6 +40,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // jsPDF's optional HTML-rendering helpers are split into their own chunks and never
+        // requested by the report generator, so keep them out of the offline cache.
+        globIgnores: ['**/html2canvas-*.js', '**/purify.es-*.js', '**/index.es-*.js'],
       },
       // Service worker only in production builds; in dev it just serves stale precaches.
       devOptions: {
