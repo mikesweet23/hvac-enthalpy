@@ -24,7 +24,17 @@ meltwater released at defrost and the defrost energy (ice warming + melting).
 constant so you see how the final RH drops as the air warms. Quick buttons show the heat required to reach
 18 / 21 / 24 °C.
 
+**Target room condition** — enter the condition you have to hit (e.g. 21 °C ± 2 K at 45 % RH). The panel
+shows the RH you would get at the target temperature and the heat to get there, the temperature at which the
+target RH is reached and whether that falls inside the band, the RH range across the band, and – when heating
+alone can't do it – how much moisture the coil (or a humidifier) has to remove or add. One tap sets the heater
+to either answer.
+
 A psychrometric chart plots the three states and the process lines, and all inputs persist on the device.
+
+**Project reference & PDF** — give the calculation a project reference and optional notes, then *Save as PDF*
+to get an A4 report with all inputs, the A/B/C results and the chart. On phones the PDF goes to the share
+sheet (Save to Files, Drive, mail…); on desktop it downloads.
 
 ## Method
 
@@ -71,10 +81,13 @@ a root domain instead, build with the default base (`npm run build`).
 
 ## Installing on a phone
 
-Open the hosted URL on your phone (it must be HTTPS – GitHub Pages is). Then:
+Open the hosted URL on your phone (it must be HTTPS – GitHub Pages is) and tap **Add to Home Screen** in the
+header:
 
-- **Android / Chrome** – tap the *Install* button in the header, or the browser's "Add to Home screen".
-- **iOS / Safari** – Share → *Add to Home Screen*.
+- **Android / Chrome** – the native install prompt appears; other Android browsers get step-by-step instructions.
+- **iOS** – a sheet walks you through Share → *Add to Home Screen* (Safari, Chrome, Edge and Firefox on iOS).
+
+The button disappears once the app is running from the home screen.
 
 The app is fully offline-capable once installed; updates are picked up automatically on the next launch.
 

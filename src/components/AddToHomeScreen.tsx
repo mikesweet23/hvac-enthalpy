@@ -50,15 +50,14 @@ export function AddToHomeScreen({ className }: { className?: string }) {
 
   const install = async () => {
     if (promptEvent) {
+      // The native prompt can only be used once; a later tap falls back to the manual steps.
+      setPromptEvent(null)
       try {
         await promptEvent.prompt()
-        const { outcome } = await promptEvent.userChoice
-        if (outcome === 'accepted') {
-          setPromptEvent(null)
-          return
-        }
+        await promptEvent.userChoice
+        return
       } catch {
-        // prompt already used or blocked – fall through to the manual steps
+        // prompt blocked or already consumed – show the manual steps instead
       }
     }
     setOpen(true)

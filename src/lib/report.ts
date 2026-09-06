@@ -3,6 +3,7 @@ import { CHART_H, CHART_PAD, CHART_W, RH_LINES, chartLayout, type ChartPoint } f
 import { fmt, fmtAuto, signed } from '@/lib/format'
 import { FLOW_UNITS, HEAT_MODES, coilPreset, type CoilId, type FlowUnit, type HeatMode } from '@/lib/presets'
 import { frostAccumulation, iceCp, type CoilResult, type HeatingResult, type MoistAirState } from '@/lib/psychro'
+import { analyseTarget, type TargetSpec } from '@/lib/target'
 import { isTouchDevice } from '@/lib/platform'
 
 export interface ReportInputs {
@@ -29,6 +30,7 @@ export interface ReportData {
   afterCoil: MoistAirState
   heating: HeatingResult
   final: MoistAirState
+  target: TargetSpec
   chartPoints: ChartPoint[]
 }
 
@@ -95,13 +97,24 @@ class Layout {
 
   sectionTitle(letter: string, title: string, color: string, subtitle?: string) {
     const doc = this.doc
-    this.ensure(14)
+    // keep the heading with at least a few rows of its content
+    this.ensure(14 + 20)
     doc.setFillColor(color)
     doc.roundedRect(MARGIN, this.y, 7, 7, 1.5, 1.5, 'F')
-    doc.setTextColor('#ffffff')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text(letter, MARGIN + 3.5, this.y + 4.9, { align: 'center' })
+    if (letter) {
+      doc.setTextColor('#ffffff')
+      doc.setFontSize(9)
+      doc.text(letter, MARGIN + 3.5, this.y + 4.9, { align: 'center' })
+    } else {
+      // no letter: draw a tiny rising line as a "chart" glyph
+      doc.setDrawColor('#ffffff')
+      doc.setLineWidth(0.6)
+      doc.setLineCap('round')
+      doc.line(MARGIN + 1.8, this.y + 5.2, MARGIN + 3.3, this.y + 3.4)
+      doc.line(MARGIN + 3.3, this.y + 3.4, MARGIN + 4.4, this.y + 4.4)
+      doc.line(MARGIN + 4.4, this.y + 4.4, MARGIN + 5.4, this.y + 2.2)
+    }
     doc.setTextColor(COLOR.ink)
     doc.setFontSize(12)
     doc.text(pdfText(title), MARGIN + 10, this.y + 5.2)
@@ -533,11 +546,76 @@ export function buildReport(doc: jsPDF, data: ReportData): jsPDF {
   }
   L.gap(3)
 
+  // Target room condition ---------------------------------------------------------
+  const ta = analyseTarget(afterCoil, massFlowKgS, data.target)
+  const bandLabel =
+    ta.spec.tolK > 0 ? `${fmt(ta.band.lo, 1)} – ${fmt(ta.band.hi, 1)} °C` : `${fmt(ta.spec.tempC, 1)} °C`
+  L.sectionTitle(
+    'C',
+    'Target room condition',
+    COLOR.c,
+    `${fmt(ta.spec.tempC, 1)} °C ± ${fmt(ta.spec.tolK, 1)} K · ${fmt(ta.spec.rhPct, 0)} % RH`,
+  )
+  L.kvTable([
+    ['Target temperature', `${fmt(ta.spec.tempC, 1)} °C`, `band ${bandLabel}`],
+    ['Target RH', `${fmt(ta.spec.rhPct, 0)} %`],
+    [
+      `RH at ${fmt(ta.spec.tempC, 1)} °C`,
+      `${fmt(ta.atTarget.rh * 100, 0)} %`,
+      ta.saturatedAtTarget ? 'saturated' : undefined,
+    ],
+    [
+      `Heat to reach ${fmt(ta.spec.tempC, 1)} °C`,
+      ta.kwToTarget === null ? 'n/a' : `${fmtAuto(ta.kwToTarget)} kW`,
+      ta.kwToTarget === null ? 'coil air already warmer' : `${signed(ta.spec.tempC - afterCoil.t, 1)} K`,
+    ],
+    [`${fmt(ta.spec.rhPct, 0)} % RH reached at`, ta.tForRh === null ? 'n/a' : `${fmt(ta.tForRh, 1)} °C`],
+    [
+      `Heat to reach ${fmt(ta.spec.rhPct, 0)} % RH`,
+      ta.kwForRh === null ? 'n/a' : `${fmtAuto(ta.kwForRh)} kW`,
+      ta.kwForRh === null && ta.tForRh !== null ? 'below coil leaving temperature' : undefined,
+    ],
+    ['RH across the band', `${fmt(ta.band.rhAtLo * 100, 0)} – ${fmt(ta.band.rhAtHi * 100, 0)} %`],
+    [
+      'Moisture needed',
+      `${fmt(ta.required.W * 1000, 2)} g/kg`,
+      `dew point ${fmt(ta.required.td, 1)} °C · have ${fmt(afterCoil.W * 1000, 2)}`,
+    ],
+  ])
+  if (ta.rhInBand && ta.tForRh !== null) {
+    L.note(
+      `Achievable by heating alone: ${fmt(ta.spec.rhPct, 0)} % RH lands at ${fmt(ta.tForRh, 1)} °C, inside the ${bandLabel} band` +
+        (ta.kwForRh !== null ? ` with ${fmtAuto(ta.kwForRh)} kW of heat.` : '.'),
+      '#047857',
+      8.5,
+    )
+  } else {
+    const d = ta.required.deltaW * 1000
+    const fix =
+      Math.abs(d) < 0.05
+        ? ''
+        : d < 0
+          ? ` Remove ${fmt(-d, 2)} g/kg (~${fmtAuto(-ta.required.kgPerH)} kg/h): lower the coil ADP or use a deeper coil.`
+          : ` Add ${fmt(d, 2)} g/kg (~${fmtAuto(ta.required.kgPerH)} kg/h): a humidifier is needed.`
+    L.note(
+      `Not achievable by heating alone: across ${bandLabel} the RH would run ${fmt(ta.band.rhAtLo * 100, 0)} – ${fmt(ta.band.rhAtHi * 100, 0)} %.` +
+        fix,
+      COLOR.warn,
+      8.5,
+    )
+  }
+  L.gap(3)
+
   // Chart --------------------------------------------------------------------
-  const chartW = 124
-  const chartH = (CHART_H / CHART_W) * chartW
-  L.ensure(chartH + 16)
-  L.sectionTitle('~', 'Psychrometric chart', '#374151', 'blue: coil process · orange: sensible heating')
+  const ratio = CHART_H / CHART_W
+  const titleH = 12
+  const remaining = PAGE_H - MARGIN - FOOTER_H - L.y
+  const fitW = (remaining - titleH - 4) / ratio
+  // Tuck the chart under the tables when it still reads well (>= 100 mm wide); otherwise give it a fresh page.
+  const chartW = fitW >= 100 ? Math.min(fitW, 124) : 160
+  const chartH = ratio * chartW
+  L.ensure(chartH + titleH + 4)
+  L.sectionTitle('', 'Psychrometric chart', '#374151', 'blue: coil process · orange: sensible heating')
   const chartX = MARGIN + (CONTENT_W - chartW) / 2
   drawChart(doc, data.chartPoints, chartX, L.y, chartW)
   L.gap(chartH + 4)
