@@ -46,10 +46,22 @@ npm run icons      # regenerate PNG icons from public/favicon.svg
 npm run lint
 ```
 
+## Hosting on GitHub Pages (free)
+
+The repo ships with a GitHub Actions workflow (`.github/workflows/deploy.yml`) that builds and publishes the
+app every time `main` is pushed.
+
+1. Push this repository to GitHub.
+2. In the repo on GitHub go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+3. Push (or re-run the workflow from the **Actions** tab). After a minute the app is live at
+   `https://<your-username>.github.io/<repo-name>/`.
+
+The workflow sets `VITE_BASE=/<repo-name>/` so the app works under the project sub-path. If you serve it from
+a root domain instead, build with the default base (`npm run build`).
+
 ## Installing on a phone
 
-Deploy the `dist/` folder to any static host served over HTTPS (Cloudflare Pages, Netlify, Vercel, GitHub
-Pages, …). Then:
+Open the hosted URL on your phone (it must be HTTPS – GitHub Pages is). Then:
 
 - **Android / Chrome** – tap the *Install* button in the header, or the browser's "Add to Home screen".
 - **iOS / Safari** – Share → *Add to Home Screen*.
