@@ -79,6 +79,11 @@ app every time `main` is pushed.
 The workflow sets `VITE_BASE=/<repo-name>/` so the app works under the project sub-path. If you serve it from
 a root domain instead, build with the default base (`npm run build`).
 
+**Renamed the repository?** The base path is baked into the build, so the currently published site keeps
+pointing at the old `/<old-repo-name>/` URLs and renders blank at the new address. Redeploy once – push any
+commit to `main` or re-run **Deploy to GitHub Pages** from the **Actions** tab – and the new name is picked up
+automatically.
+
 ## Installing on a phone
 
 Open the hosted URL on your phone (it must be HTTPS – GitHub Pages is) and tap **Add to Home Screen** in the
