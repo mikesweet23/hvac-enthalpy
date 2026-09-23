@@ -7,14 +7,23 @@ import { defineConfig } from 'vite'
 // GitHub Pages serves project sites under /<repo>/ – the deploy workflow sets VITE_BASE accordingly.
 const base = process.env.VITE_BASE ?? '/'
 
+// Shown in the footer so you can tell at a glance which deploy a phone is running.
+const commit = (process.env.GITHUB_SHA ?? '').slice(0, 7)
+const builtAt = new Date().toISOString()
+
 // https://vite.dev/config/
 export default defineConfig({
   base,
+  define: {
+    __APP_BUILD__: JSON.stringify({ commit, builtAt }),
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
+      // New deploys take over immediately and the open page reloads onto them (see src/pwa.ts).
       registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Enthalpy – HVAC Psychrometrics',
@@ -39,6 +48,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // jsPDF's optional HTML-rendering helpers are split into their own chunks and never
         // requested by the report generator, so keep them out of the offline cache.

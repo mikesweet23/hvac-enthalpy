@@ -31,6 +31,13 @@ const DEFAULTS = {
   target: { tempC: 21, tolK: 2, rhPct: 45 } as TargetSpec,
 }
 
+const buildLabel = [
+  __APP_BUILD__.commit,
+  new Date(__APP_BUILD__.builtAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+]
+  .filter(Boolean)
+  .join(' · ')
+
 export default function App() {
   const [tempC, setTempC] = usePersistentState('tempC', DEFAULTS.tempC)
   const [rhPct, setRhPct] = usePersistentState('rhPct', DEFAULTS.rhPct)
@@ -232,6 +239,7 @@ export default function App() {
           moisture is held as frost (heat of fusion 333.6 kJ/kg, temperature-dependent ice specific heat) until
           defrost. Results are for design sizing and diagnostics – verify against manufacturer selection data
           before committing.
+          <span className="mt-1 block font-mono opacity-70">Build {buildLabel}</span>
         </footer>
       </main>
     </div>

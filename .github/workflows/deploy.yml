@@ -24,6 +24,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm test
       - name: Build
         # Project sites live at https://<user>.github.io/<repo>/ so the app needs that base path.
