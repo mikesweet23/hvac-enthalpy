@@ -94,7 +94,26 @@ header:
 
 The button disappears once the app is running from the home screen.
 
-The app is fully offline-capable once installed; updates are picked up automatically on the next launch.
+The app is fully offline-capable once installed.
+
+## Updates
+
+Every deploy reaches phones and browsers without reinstalling or clearing caches:
+
+- On each launch or reload the service worker checks for a new build. If there is one it takes over
+  immediately and the page reloads itself onto it (you may see the old version for a split second first).
+- While the app stays open – or is brought back from the background on a phone, which usually resumes it
+  rather than reloading – it checks again (on resume, and every 30 minutes).
+- The footer shows the build (commit and build time), so you can confirm which version a device is on.
+
+Entered values are kept in local storage, so the automatic reload never loses your inputs.
+
+## Input behaviour
+
+- Number boxes are plain text fields: the mouse wheel / trackpad scroll never changes a value, even when a box
+  is focused. Type the figure and press Enter or tap away to apply it.
+- On touch screens a slider only moves when you drag its thumb. A finger landing on the track while you
+  scroll the page scrolls the page instead of changing the figure. With a mouse, clicking the track still jumps.
 
 ## Stack
 

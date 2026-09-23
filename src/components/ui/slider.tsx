@@ -8,6 +8,7 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  onPointerDown,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
   const _values = React.useMemo(
@@ -27,8 +28,20 @@ function Slider({
       value={value}
       min={min}
       max={max}
+      onPointerDown={(e) => {
+        onPointerDown?.(e)
+        // On touch screens only a drag that starts on the thumb moves the value, so a finger
+        // landing on the track while scrolling the page can't change a figure. Radix skips its
+        // own handler when the event is default-prevented; mouse clicks on the track still jump.
+        const target = e.target as Element
+        if (e.pointerType !== "mouse" && !target.closest("[data-slot=slider-thumb]")) {
+          e.preventDefault()
+          // Touch pointers are implicitly captured, which would let Radix track the swipe anyway.
+          if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId)
+        }
+      }}
       className={cn(
-        "relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col",
+        "relative flex w-full touch-pan-y items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col",
         className
       )}
       {...props}
@@ -46,7 +59,7 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
-          className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50"
+          className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none touch-none after:absolute after:-inset-2 pointer-coarse:size-5 pointer-coarse:after:-inset-3 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50"
         />
       ))}
     </SliderPrimitive.Root>
